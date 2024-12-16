@@ -1,86 +1,51 @@
 import streamlit as st
 import requests
 
-# Retrieve the Hugging Face API token from Streamlit secrets
-HUGGINGFACE_API_TOKEN = st.secrets["huggingface"]["api_token"]
+# Hugging Face API URL and Token
+API_URL = "https://api-inference.huggingface.co/models/nyrahealth/CrisperWhisper"
+headers = {"Authorization": "Bearer hf_your_huggingface_token"}
 
-# Hugging Face API URLs and Headers
-TRANSCRIPTION_API_URL = "https://api-inference.huggingface.co/models/openai/whisper-large"
-DIARIZATION_API_URL = "https://api-inference.huggingface.co/models/pyannote/speaker-diarization"
-HEADERS = {"Authorization": f"Bearer {HUGGINGFACE_API_TOKEN}"}  # Use token from secrets
-
-# Function to upload audio for transcription
-def transcribe_audio(file_path):
-    with open(file_path, "rb") as audio:
-        response = requests.post(TRANSCRIPTION_API_URL, headers=HEADERS, data=audio)
+# Function to query the Hugging Face model for transcription and diarization
+def query(filename):
+    with open(filename, "rb") as f:
+        data = f.read()
+    response = requests.post(API_URL, headers=headers, data=data)
     return response.json()
 
-# Function to upload audio for speaker diarization
-def diarize_audio(file_path):
-    with open(file_path, "rb") as audio:
-        response = requests.post(DIARIZATION_API_URL, headers=HEADERS, data=audio)
-    return response.json()
-
-# Map speaker IDs to names
-def map_speakers(diarization_result):
-    speakers = {}
-    for idx, segment in enumerate(diarization_result.get('segments', [])):
-        speaker_id = segment['speaker']
-        if speaker_id not in speakers:
-            if len(speakers) == 0:
-                speakers[speaker_id] = "Agent Jack"
-            else:
-                speakers[speaker_id] = "Mark"
-    return speakers
-
-# Streamlit UI
+# Streamlit app
 def main():
-    st.title("Call Recording Transcription App with Speaker Labeling")
-    st.write("Upload an audio file to transcribe and label speakers.")
+    st.title("Speaker Diarization and Transcription with CrisperWhisper")
 
-    uploaded_file = st.file_uploader("Upload Call Recording (WAV/MP3)", type=["wav", "mp3"])
+    # Upload audio file (WAV, MP3, or FLAC formats)
+    uploaded_file = st.file_uploader("Upload Call Recording (WAV/MP3/FLAC)", type=["wav", "mp3", "flac"])
 
     if uploaded_file:
+        # Display audio player for the uploaded file
         st.audio(uploaded_file, format="audio/wav")
-        
-        # Save the uploaded file temporarily
-        temp_file = "temp_audio.wav"
-        with open(temp_file, "wb") as f:
-            f.write(uploaded_file.read())
-        
-        # Call transcription API
-        st.info("Transcribing audio...")
-        transcription = transcribe_audio(temp_file)
-        st.success("Transcription complete!")
 
-        # Call diarization API
-        st.info("Performing speaker diarization...")
-        diarization = diarize_audio(temp_file)
-        
-        # Check if the diarization response contains an error
-        if 'error' in diarization:
-            st.error(f"Diarization API error: {diarization['error']}")
-            return  # Stop further processing if there's an error in the diarization response
-        
-        st.success("Speaker diarization complete!")
+        # Save the uploaded file temporarily to pass to the API
+        temp_file_path = "temp_audio_file" + uploaded_file.name
+        with open(temp_file_path, "wb") as temp_file:
+            temp_file.write(uploaded_file.read())
 
-        # Debugging: Display diarization response
-        st.write("Diarization Response:", diarization)
+        # Call the CrisperWhisper model to transcribe and diarize the audio
+        st.info("Processing your audio...")
+        result = query(temp_file_path)
 
-        # Map speakers and display results
-        speaker_map = map_speakers(diarization)
-        st.header("Final Transcription with Speaker Labels")
-        
-        # Use .get() method to avoid KeyError if 'segments' is missing
-        segments = diarization.get('segments', [])
-        
-        if not segments:
-            st.error("No segments found in diarization result.")
+        # Check if the response contains valid results
+        if "error" in result:
+            st.error("There was an error processing the audio: " + result["error"])
         else:
-            for segment in segments:
-                speaker_name = speaker_map.get(segment['speaker'], "Unknown")
-                text = transcription.get('text', '')
-                st.write(f"**{speaker_name}:** {text}")
+            # Display transcribed text and diarization results
+            st.success("Transcription and diarization complete!")
+
+            st.header("Transcription with Speaker Labels")
+            for segment in result.get("segments", []):
+                speaker_name = segment.get("speaker", "Unknown")
+                start_time = segment.get("start", 0)
+                end_time = segment.get("end", 0)
+                text = segment.get("text", "")
+                st.write(f"**{speaker_name}:** {text} (from {start_time}s to {end_time}s)")
 
 if __name__ == "__main__":
     main()
