@@ -3,7 +3,7 @@ import requests
 
 # Get the Hugging Face API token from Streamlit secrets
 API_TOKEN = st.secrets["hf_token"]
-API_URL = "https://api-inference.huggingface.co/models/theainerd/Wav2Vec2-large-xlsr-hindi"
+API_URL = "https://api-inference.huggingface.co/models/jonatasgrosman/wav2vec2-large-xlsr-53-english"
 headers = {"Authorization": f"Bearer {API_TOKEN}"}
 
 # Function to query the Hugging Face model for transcription
@@ -15,10 +15,10 @@ def query(filename):
 
 # Streamlit app
 def main():
-    st.title("Hindi Speech-to-Text with Wav2Vec2")
+    st.title("English Speech-to-Text with Wav2Vec2")
 
     # Upload audio file (WAV, MP3, or FLAC formats)
-    uploaded_file = st.file_uploader("Upload Call Recording (WAV/MP3/FLAC)", type=["wav", "mp3", "flac"])
+    uploaded_file = st.file_uploader("Upload Audio (WAV/MP3/FLAC)", type=["wav", "mp3", "flac"])
 
     if uploaded_file:
         # Display audio player for the uploaded file
