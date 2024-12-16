@@ -1,6 +1,5 @@
 import streamlit as st
 import requests
-from pydub import AudioSegment
 
 # Hugging Face API URLs and Headers
 TRANSCRIPTION_API_URL = "https://api-inference.huggingface.co/models/openai/whisper-large"
@@ -43,8 +42,8 @@ def main():
         
         # Save the uploaded file temporarily
         temp_file = "temp_audio.wav"
-        audio = AudioSegment.from_file(uploaded_file)
-        audio.export(temp_file, format="wav")
+        with open(temp_file, "wb") as f:
+            f.write(uploaded_file.read())
         
         # Call transcription API
         st.info("Transcribing audio...")
