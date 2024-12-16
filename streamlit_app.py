@@ -1,76 +1,81 @@
 import streamlit as st
-from pyannote.audio import Pipeline
 import requests
-import os
+from speechbrain.pretrained import SpeakerDiarization
 
-# Hugging Face API setup
-TRANSCRIPTION_API_URL = "https://api-inference.huggingface.co/models/openai/whisper-large"
+# Set up Hugging Face API details
+API_URL = "https://api-inference.huggingface.co/models/openai/whisper-large-v3-turbo"
+
+# Retrieve Hugging Face API token from Streamlit secrets
 API_TOKEN = st.secrets["HUGGINGFACE_API_TOKEN"]
 HEADERS = {"Authorization": f"Bearer {API_TOKEN}"}
 
-# Initialize pyannote.audio diarization pipeline
-@st.cache_resource
-def load_diarization_pipeline():
-    return Pipeline.from_pretrained("pyannote/speaker-diarization", use_auth_token=API_TOKEN)
+# Function to send the audio file to the API (for transcription)
+def transcribe_audio(file):
+    try:
+        # Read the file as binary
+        data = file.read()
+        response = requests.post(API_URL, headers=HEADERS, data=data)
+        if response.status_code == 200:
+            return response.json()  # Return transcription
+        else:
+            return {"error": f"API Error: {response.status_code} - {response.text}"}
+    except Exception as e:
+        return {"error": str(e)}
 
-diarization_pipeline = load_diarization_pipeline()
-
-# Function for transcription using Whisper
-def transcribe_audio(file_path):
-    with open(file_path, "rb") as f:
-        audio_data = f.read()
-
-    response = requests.post(TRANSCRIPTION_API_URL, headers=HEADERS, data=audio_data)
-    if response.status_code == 200:
-        return response.json().get("text", "Transcription failed.")
-    else:
-        return f"API Error: {response.status_code} - {response.text}"
+# Function for speaker diarization
+def diarize_audio(file):
+    try:
+        # Initialize the speaker diarization pipeline
+        diarization = SpeakerDiarization.from_hparams(source="speechbrain/diarization-librispeech", savedir="tmpdir")
+        
+        # Perform diarization
+        diarization_result = diarization.diarize_file(file)
+        
+        # Process diarization result
+        speakers_segments = []
+        for segment in diarization_result:
+            speakers_segments.append({
+                "speaker": segment["speaker"],
+                "start": segment["start"],
+                "end": segment["end"]
+            })
+        
+        return speakers_segments
+    except Exception as e:
+        return {"error": str(e)}
 
 # Streamlit UI
-st.title("🔊 Speaker Diarization and Transcription Web App")
-st.write("Upload an audio file, and this app will perform speaker diarization and transcription.")
+st.title("🎙️ Audio Transcription and Speaker Diarization Web App")
+st.write("Upload an audio file, and this app will transcribe it using OpenAI Whisper via Hugging Face API and perform speaker diarization.")
 
 # File uploader
-uploaded_file = st.file_uploader("Upload your audio file (e.g., .wav, .mp3)", type=["wav", "mp3"])
+uploaded_file = st.file_uploader("Upload your audio file (e.g., .wav, .flac, .mp3)", type=["wav", "flac", "mp3"])
 
 if uploaded_file is not None:
-    # Save the uploaded file to a temporary directory
-    temp_file_path = "temp_audio_file.wav"
-    with open(temp_file_path, "wb") as f:
-        f.write(uploaded_file.read())
+    # Display uploaded audio
+    st.audio(uploaded_file, format="audio/mp3", start_time=0)
+    
+    # Display transcription
+    st.info("Transcribing audio... Please wait.")
+    result = transcribe_audio(uploaded_file)
+    
+    # Display transcription result
+    if "text" in result:
+        st.success("Transcription Complete:")
+        st.write(result["text"])
+    elif "error" in result:
+        st.error(f"Error: {result['error']}")
+    else:
+        st.warning("Unexpected response from the API.")
+    
+    # Perform speaker diarization
+    st.info("Performing speaker diarization... Please wait.")
+    diarization_result = diarize_audio(uploaded_file)
+    
+    if "error" in diarization_result:
+        st.error(f"Error: {diarization_result['error']}")
+    else:
+        st.success("Speaker Diarization Result:")
+        for segment in diarization_result:
+            st.write(f"Speaker {segment['speaker']} | Start: {segment['start']}s | End: {segment['end']}s")
 
-    st.audio(uploaded_file, format="audio/wav")
-    st.info("Processing audio... This may take a few moments.")
-
-    # Perform diarization
-    try:
-        diarization = diarization_pipeline(temp_file_path)
-
-        # Display diarization results
-        st.success("Diarization Complete!")
-        st.write("Speaker Diarization Results:")
-
-        # Convert diarization results to a readable format
-        diarization_results = []
-        for turn, _, speaker in diarization.itertracks(yield_label=True):
-            diarization_results.append(f"{turn.start:.1f}s - {turn.end:.1f}s: Speaker {speaker}")
-
-        st.write("\n".join(diarization_results))
-    except Exception as e:
-        st.error(f"An error occurred during diarization: {e}")
-
-    # Perform transcription
-    try:
-        st.info("Transcribing audio... This may take a moment.")
-        transcription_result = transcribe_audio(temp_file_path)
-
-        if transcription_result:
-            st.success("Transcription Complete!")
-            st.write(transcription_result)
-        else:
-            st.error("Failed to transcribe the audio.")
-    except Exception as e:
-        st.error(f"An error occurred during transcription: {e}")
-
-    # Clean up temporary file
-    os.remove(temp_file_path)
