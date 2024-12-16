@@ -1,10 +1,9 @@
 import streamlit as st
 import requests
-import torch
-from pyannote.audio.pipelines import SpeakerDiarization
-from pyannote.core import Segment
+import os
+from pyAudioAnalysis import audioSegmentation as aS
 
-# Set up Hugging Face API details
+# Hugging Face API details
 API_URL = "https://api-inference.huggingface.co/models/openai/whisper-large-v3-turbo"
 API_TOKEN = st.secrets["HUGGINGFACE_API_TOKEN"]
 HEADERS = {"Authorization": f"Bearer {API_TOKEN}"}
@@ -21,18 +20,17 @@ def transcribe_audio(file):
     except Exception as e:
         return {"error": str(e)}
 
-# Function to perform speaker diarization using pyannote-audio
+# Function to perform speaker diarization using pyAudioAnalysis
 def perform_diarization(file_path):
-    # Initialize the pre-trained speaker diarization pipeline
-    pipeline = SpeakerDiarization.from_pretrained("pyannote/speaker-diarization")
-    
-    # Diarization on the audio file
-    diarization = pipeline(file_path)
+    # Perform speaker diarization
+    [seg, class_names, accuracy] = aS.mtFileClassification(file_path, 
+                                                         "pyAudioAnalysis/data/models/svm_rbf_smote", 
+                                                         "svm")
     
     # Collecting speaker segments (start, end) and speaker labels
     speaker_segments = []
-    for turn, _, speaker in diarization.itertracks(yield_label=True):
-        speaker_segments.append((speaker, turn.start, turn.end))
+    for i, (segment, class_id) in enumerate(zip(seg, class_names)):
+        speaker_segments.append((class_id, segment[0], segment[1]))
     
     return speaker_segments
 
