@@ -1,9 +1,10 @@
 import streamlit as st
 import requests
 
-# Hugging Face API URL and Token
+# Get the Hugging Face API token from Streamlit secrets
+API_TOKEN = st.secrets["hf_token"]
 API_URL = "https://api-inference.huggingface.co/models/nyrahealth/CrisperWhisper"
-headers = {"Authorization": "Bearer hf_your_huggingface_token"}
+headers = {"Authorization": f"Bearer {API_TOKEN}"}
 
 # Function to query the Hugging Face model for transcription and diarization
 def query(filename):
