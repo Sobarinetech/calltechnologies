@@ -3,3 +3,4 @@ requests
 pyAudioAnalysis
 scikit-learn
 matplotlib
+eyed3
