@@ -1,13 +1,10 @@
 import streamlit as st
 import librosa
 import whisper
-from pyannote.audio import Pipeline
+from pyaudioanalysis import audioSegmentation as aS
 
 # Load Whisper model
-whisper_model = whisper.load_model("base")
-
-# Load Pyannote speaker diarization pipeline
-diarization_pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization")
+model = whisper.load_model("base")
 
 # Streamlit App UI
 st.title("🎙️ Customer Support Call Analysis")
@@ -22,21 +19,26 @@ if uploaded_file is not None:
     # Display audio player
     st.audio(uploaded_file, format="audio/wav")
 
+    # Save audio to temporary file for Whisper and pyAudioAnalysis
+    with open("temp_audio.wav", "wb") as f:
+        f.write(uploaded_file.getbuffer())
+
     # Transcription using Whisper
-    transcription_result = whisper_model.transcribe(audio)
+    transcription_result = model.transcribe("temp_audio.wav")
     text = transcription_result["text"]
     
     # Display Transcript
     st.write("Transcript:")
     st.write(text)
 
-    # Diarization using pyannote.audio
-    diarization_result = diarization_pipeline(uploaded_file.name)
-    
+    # Speaker Diarization using pyAudioAnalysis
+    [flagsInd, classesAll, acc, CM] = aS.mtFileClassification("temp_audio.wav", "data/svmSM", "svm", True)
+
     # Display Diarization Segments
     st.write("Diarization Segments:")
-    for segment in diarization_result.itertracks(yield_label=True):
-        start_time, end_time, speaker = segment
-        st.write(f"Speaker {speaker}: {start_time:.2f}s - {end_time:.2f}s")
+    for i, flag in enumerate(flagsInd):
+        start_time = i * 0.1  # Segment length in seconds
+        speaker = classesAll[flag]
+        st.write(f"Speaker {speaker}: {start_time:.2f}s")
 
 # Add any other analyses you wish to include...
