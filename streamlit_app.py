@@ -1,43 +1,42 @@
 import streamlit as st
-from huggingface_hub import login
-from transformers import pipeline, AutoProcessor, AutoModelForSpeechSeq2Seq
-import torch
+from speechbrain.pretrained import SpeakerDiarization
+import os
 
-# Login to Hugging Face using your token (replace 'your_huggingface_token' with the actual token)
-login(token="your_huggingface_token")
+# Set up the SpeechBrain diarization model
+@st.cache_resource
+def load_diarization_model():
+    return SpeakerDiarization.from_hparams(
+        source="speechbrain/speaker-diarization",
+        savedir="tmp_model_dir"
+    )
 
-# Initialize the model and processor from Hugging Face
-pipe = pipeline("automatic-speech-recognition", model="nyrahealth/CrisperWhisper")
+diarization_model = load_diarization_model()
 
-processor = AutoProcessor.from_pretrained("nyrahealth/CrisperWhisper")
-model = AutoModelForSpeechSeq2Seq.from_pretrained("nyrahealth/CrisperWhisper")
+# Streamlit UI
+st.title("🔊 Speaker Diarization Web App")
+st.write("Upload an audio file, and this app will perform speaker diarization using SpeechBrain.")
 
-# Streamlit UI Setup
-st.title("CrisperWhisper Speech Recognition")
-st.write("Upload an audio file and get a verbatim transcription with precise word-level timestamps.")
+# File uploader
+uploaded_file = st.file_uploader("Upload your audio file (e.g., .wav, .mp3)", type=["wav", "mp3"])
 
-# Audio file upload
-audio_file = st.file_uploader("Choose a .wav audio file", type=["wav"])
+if uploaded_file is not None:
+    # Save the uploaded file to a temporary directory
+    with open("temp_audio_file.wav", "wb") as f:
+        f.write(uploaded_file.read())
 
-if audio_file is not None:
-    # Save the uploaded audio file temporarily
-    with open("temp_audio.wav", "wb") as f:
-        f.write(audio_file.getbuffer())
-    
-    st.audio(audio_file, format="audio/wav")
+    st.audio(uploaded_file, format="audio/wav")
+    st.info("Processing audio... This may take a moment.")
 
-    # Process the audio file
-    st.write("Processing the audio...")
+    # Perform diarization
+    try:
+        diarization_output = diarization_model.diarize_file("temp_audio_file.wav")
 
-    # Load the audio file for transcription
-    speech_input = processor("temp_audio.wav", return_tensors="pt", sampling_rate=16000)
+        # Display diarization results
+        st.success("Diarization Complete!")
+        st.write("Speaker Diarization Results:")
+        st.json(diarization_output["content"])  # Display raw diarization output
+    except Exception as e:
+        st.error(f"An error occurred during processing: {e}")
 
-    # Get the prediction (the transcribed text)
-    with torch.no_grad():
-        transcription = model.generate(**speech_input)
-
-    # Decode the transcription and show the result
-    transcribed_text = processor.decode(transcription[0], skip_special_tokens=True)
-
-    st.subheader("Transcribed Text")
-    st.write(transcribed_text)
+    # Clean up temporary file
+    os.remove("temp_audio_file.wav")
