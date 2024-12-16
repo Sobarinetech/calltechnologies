@@ -2,3 +2,4 @@ streamlit
 requests 
 pyAudioAnalysis
 scikit-learn
+matplotlib
