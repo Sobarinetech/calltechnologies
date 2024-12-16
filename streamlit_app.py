@@ -10,7 +10,13 @@ headers = {"Authorization": f"Bearer {API_TOKEN}"}
 def query(filename):
     with open(filename, "rb") as f:
         data = f.read()
-    response = requests.post(API_URL, headers=headers, data=data)
+
+    # Add the return_timestamps=True parameter for long audio inputs
+    params = {
+        "return_timestamps": "true"
+    }
+    
+    response = requests.post(API_URL, headers=headers, data=data, params=params)
     return response.json()
 
 # Streamlit app
