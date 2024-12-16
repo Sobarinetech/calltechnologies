@@ -1,4 +1,5 @@
 streamlit
 librosa 
-whisper
-pyannote.audio
+ openai-whisper 
+pyaudioanalysis
+
