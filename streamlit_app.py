@@ -1,12 +1,12 @@
 import streamlit as st
 import requests
 
-# Get the Hugging Face API token from Streamlit secrets
-API_TOKEN = st.secrets["hf_token"]
-API_URL = "https://api-inference.huggingface.co/models/jonatasgrosman/wav2vec2-large-xlsr-53-english"
+# Hugging Face API URL and headers with authorization
+API_URL = "https://api-inference.huggingface.co/models/pyannote/speaker-diarization-3.1"
+API_TOKEN = st.secrets["hf_token"]  # Use the Hugging Face token stored in Streamlit secrets
 headers = {"Authorization": f"Bearer {API_TOKEN}"}
 
-# Function to query the Hugging Face model for transcription
+# Function to query the Hugging Face API for speaker diarization
 def query(filename):
     with open(filename, "rb") as f:
         data = f.read()
@@ -15,13 +15,13 @@ def query(filename):
 
 # Streamlit app
 def main():
-    st.title("English Speech-to-Text with Wav2Vec2")
+    st.title("Speaker Diarization with pyannote")
 
-    # Upload audio file (WAV, MP3, or FLAC formats)
+    # Upload audio file (WAV, MP3, FLAC formats)
     uploaded_file = st.file_uploader("Upload Audio (WAV/MP3/FLAC)", type=["wav", "mp3", "flac"])
 
     if uploaded_file:
-        # Display audio player for the uploaded file
+        # Display the audio file for playback
         st.audio(uploaded_file, format="audio/wav")
 
         # Save the uploaded file temporarily to pass to the API
@@ -29,18 +29,25 @@ def main():
         with open(temp_file_path, "wb") as temp_file:
             temp_file.write(uploaded_file.read())
 
-        # Call the Wav2Vec2 model to transcribe the audio
-        st.info("Processing your audio...")
+        # Call the speaker diarization API
+        st.info("Processing your audio for speaker diarization...")
         result = query(temp_file_path)
 
         # Check if the response contains valid results
         if "error" in result:
             st.error("There was an error processing the audio: " + result["error"])
         else:
-            # Display transcribed text
-            st.success("Transcription complete!")
-            st.header("Transcribed Text")
-            st.write(result.get("text", "No transcription available"))
+            # Display diarization segments
+            st.success("Speaker diarization complete!")
+            st.header("Diarization Segments")
+            if "segments" in result:
+                for segment in result["segments"]:
+                    start_time = segment.get("start", "N/A")
+                    end_time = segment.get("end", "N/A")
+                    speaker = segment.get("speaker", "Unknown")
+                    st.write(f"**Speaker {speaker}:** {start_time}s - {end_time}s")
+            else:
+                st.error("No diarization segments found in the result.")
 
 if __name__ == "__main__":
     main()
