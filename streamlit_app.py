@@ -1,10 +1,13 @@
 import streamlit as st
 import requests
 
+# Retrieve the Hugging Face API token from Streamlit secrets
+HUGGINGFACE_API_TOKEN = st.secrets["huggingface"]["api_token"]
+
 # Hugging Face API URLs and Headers
 TRANSCRIPTION_API_URL = "https://api-inference.huggingface.co/models/openai/whisper-large"
 DIARIZATION_API_URL = "https://api-inference.huggingface.co/models/pyannote/speaker-diarization"
-HEADERS = {"Authorization": "Bearer <your_correct_huggingface_token>"}  # Replace with your correct token
+HEADERS = {"Authorization": f"Bearer {HUGGINGFACE_API_TOKEN}"}  # Use token from secrets
 
 # Function to upload audio for transcription
 def transcribe_audio(file_path):
