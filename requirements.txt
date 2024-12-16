@@ -1,6 +1,6 @@
 streamlit
 librosa 
-speechrecognition
+whisper
 spacy 
 textblob 
 pyannote.audio
