@@ -1,7 +1,4 @@
 streamlit
 librosa 
 whisper
-spacy 
-textblob 
 pyannote.audio
-en_core_web_sm
