@@ -1,3 +1,7 @@
-streamlit 
-requests 
-speechbrain
+streamlit
+librosa
+speechrecognition
+spacy
+textblob
+pyannote.audio
+requests
