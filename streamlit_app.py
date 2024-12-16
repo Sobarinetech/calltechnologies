@@ -1,113 +1,86 @@
 import streamlit as st
-import torch
-from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor, pipeline
-from datasets import load_dataset
-import tempfile
+import requests
 import os
+import wave
+import numpy as np
+from pyAudioAnalysis import audioSegmentation as aS
 
-# Function to adjust pauses between words
-def adjust_pauses_for_hf_pipeline_output(pipeline_output, split_threshold=0.12):
-    """
-    Adjust pause timings by distributing pauses up to the threshold evenly between adjacent words.
-    """
-    adjusted_chunks = pipeline_output["chunks"].copy()
+# Hugging Face API details
+API_URL = "https://api-inference.huggingface.co/models/openai/whisper-large-v3-turbo"
+API_TOKEN = st.secrets["HUGGINGFACE_API_TOKEN"]
+HEADERS = {"Authorization": f"Bearer {API_TOKEN}"}
 
-    for i in range(len(adjusted_chunks) - 1):
-        current_chunk = adjusted_chunks[i]
-        next_chunk = adjusted_chunks[i + 1]
+# Function to send the audio file to the Hugging Face API for transcription
+def transcribe_audio(file):
+    try:
+        data = file.read()
+        response = requests.post(API_URL, headers=HEADERS, data=data)
+        if response.status_code == 200:
+            return response.json()  # Return transcription
+        else:
+            return {"error": f"API Error: {response.status_code} - {response.text}"}
+    except Exception as e:
+        return {"error": str(e)}
 
-        current_start, current_end = current_chunk["timestamp"]
-        next_start, next_end = next_chunk["timestamp"]
-        pause_duration = next_start - current_end
+# Function to perform speaker diarization using pyAudioAnalysis
+def perform_diarization(file_path):
+    [seg, class_names, accuracy] = aS.mtFileClassification(file_path, "pyAudioAnalysis/data/models/svm_rbf_smote", "svm")
+    return seg, class_names
 
-        if pause_duration > 0:
-            if pause_duration > split_threshold:
-                distribute = split_threshold / 2
-            else:
-                distribute = pause_duration / 2
-
-            # Adjust current chunk end time
-            adjusted_chunks[i]["timestamp"] = (current_start, current_end + distribute)
-
-            # Adjust next chunk start time
-            adjusted_chunks[i + 1]["timestamp"] = (next_start - distribute, next_end)
+# Function to label speakers
+def label_speakers(transcription, seg, class_names):
+    lines = transcription.split('\n')
+    labeled_transcription = []
     
-    pipeline_output["chunks"] = adjusted_chunks
+    current_speaker = 0  # Start with the first speaker
+    for i, line in enumerate(lines):
+        # Map the segments to speakers
+        speaker = class_names[int(seg[i][1])]
+        labeled_transcription.append(f'{speaker}: {line.strip()}')
 
-    return pipeline_output
+    return "\n".join(labeled_transcription)
 
-# Streamlit app function
-def main():
-    st.title("CrisperWhisper ASR Web App")
+# Streamlit UI
+st.title("🎙️ Call Transcription and Analysis")
+st.write("Upload an audio file, and this app will transcribe it and perform speaker diarization.")
 
-    # Upload audio file
-    uploaded_file = st.file_uploader("Upload Audio File (WAV/MP3/FLAC)", type=["wav", "mp3", "flac"])
+# File uploader
+uploaded_file = st.file_uploader("Upload your audio file", type=["wav", "flac", "mp3"])
+
+if uploaded_file is not None:
+    # Display uploaded audio
+    st.audio(uploaded_file, format="audio/mp3", start_time=0)
     
-    if uploaded_file is not None:
-        # Show the audio file for playback
-        st.audio(uploaded_file, format="audio/wav")
-
-        # Save the uploaded file temporarily
-        with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
-            tmp_file.write(uploaded_file.read())
-            tmp_file_path = tmp_file.name
+    # Save the file to a temporary location for processing
+    temp_file_path = "temp_audio.wav"
+    with open(temp_file_path, "wb") as f:
+        f.write(uploaded_file.getbuffer())
+    
+    st.info("Transcribing audio... Please wait.")
+    
+    # Perform transcription using Hugging Face API
+    result = transcribe_audio(uploaded_file)
+    
+    # If transcription is successful, perform diarization and display results
+    if "text" in result:
+        st.success("Transcription Complete:")
+        transcription = result["text"]
         
-        # Run transcription using Hugging Face ASR pipeline
-        st.info("Processing audio for transcription...")
-        transcription = process_audio_with_hf(tmp_file_path)
-        if transcription:
-            st.success("Transcription Complete!")
-            st.header("Transcription with Word Timestamps")
-            # Display the result
-            display_transcription(transcription)
-
-        # Clean up temporary file
-        os.remove(tmp_file_path)
-
-# Function to process audio with Hugging Face's pipeline
-def process_audio_with_hf(audio_file_path):
-    # Set device and dtype for CPU (since no GPU is available)
-    device = "cpu"
-    torch_dtype = torch.float32
-
-    model_id = "nyrahealth/CrisperWhisper"  # Hugging Face model ID for CrisperWhisper
-
-    # Load the model and processor
-    model = AutoModelForSpeechSeq2Seq.from_pretrained(
-        model_id, torch_dtype=torch_dtype, low_cpu_mem_usage=True, use_safetensors=True
-    )
-    model.to(device)
-
-    processor = AutoProcessor.from_pretrained(model_id)
-
-    # Setup pipeline for ASR
-    pipe = pipeline(
-        "automatic-speech-recognition",
-        model=model,
-        tokenizer=processor.tokenizer,
-        feature_extractor=processor.feature_extractor,
-        chunk_length_s=30,  # Process audio in 30-second chunks
-        batch_size=16,
-        return_timestamps='word',  # Return word-level timestamps
-        torch_dtype=torch_dtype,
-        device=device,
-    )
-
-    # Load the audio file and process it
-    hf_pipeline_output = pipe(audio_file_path)
-
-    # Adjust pauses to improve transcription naturalness
-    crisper_whisper_result = adjust_pauses_for_hf_pipeline_output(hf_pipeline_output)
-
-    return crisper_whisper_result
-
-# Function to display transcription with timestamps
-def display_transcription(transcription):
-    # Display each chunk with timestamps and text
-    for chunk in transcription["chunks"]:
-        start_time, end_time = chunk["timestamp"]
-        word = chunk["text"]
-        st.write(f"**{word}** (Start: {start_time:.2f}s, End: {end_time:.2f}s)")
-
-if __name__ == "__main__":
-    main()
+        # Perform speaker diarization
+        seg, class_names = perform_diarization(temp_file_path)
+        
+        # Label the transcription with speaker labels
+        labeled_transcription = label_speakers(transcription, seg, class_names)
+        st.text_area("Transcription with Speaker Labels", labeled_transcription, height=300)
+        
+        # Optional: show the raw transcription as well
+        st.subheader("Raw Transcription:")
+        st.write(transcription)
+    elif "error" in result:
+        st.error(f"Error: {result['error']}")
+    else:
+        st.warning("Unexpected response from the API.")
+    
+    # Clean up temporary file
+    if os.path.exists(temp_file_path):
+        os.remove(temp_file_path)
