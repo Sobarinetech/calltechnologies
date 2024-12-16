@@ -1,35 +1,55 @@
 import streamlit as st
+import requests
 import librosa
-import whisper
 from pyaudioanalysis import audioSegmentation as aS
 
-# Load Whisper model
-model = whisper.load_model("base")
+# Set up Hugging Face API details
+API_URL = "https://api-inference.huggingface.co/models/openai/whisper-large-v3-turbo"
 
-# Streamlit App UI
+# Retrieve Hugging Face API token from Streamlit secrets
+API_TOKEN = st.secrets["HUGGINGFACE_API_TOKEN"]
+HEADERS = {"Authorization": f"Bearer {API_TOKEN}"}
+
+# Function to send the audio file to the API
+def transcribe_audio(file):
+    try:
+        # Read the file as binary
+        data = file.read()
+        response = requests.post(API_URL, headers=HEADERS, data=data)
+        if response.status_code == 200:
+            return response.json()  # Return transcription
+        else:
+            return {"error": f"API Error: {response.status_code} - {response.text}"}
+    except Exception as e:
+        return {"error": str(e)}
+
+# Streamlit UI
 st.title("🎙️ Customer Support Call Analysis")
+st.write("Upload an audio file, and this app will transcribe it using OpenAI Whisper via Hugging Face API and perform speaker diarization.")
 
 # File uploader
 uploaded_file = st.file_uploader("Upload your audio file (e.g., .wav, .flac, .mp3)", type=["wav", "flac", "mp3"])
 
 if uploaded_file is not None:
-    # Load audio file
-    audio, sample_rate = librosa.load(uploaded_file, sr=None)
-    
-    # Display audio player
+    # Display uploaded audio
     st.audio(uploaded_file, format="audio/wav")
-
-    # Save audio to temporary file for Whisper and pyAudioAnalysis
+    st.info("Transcribing audio... Please wait.")
+    
+    # Transcribe the uploaded audio file
+    result = transcribe_audio(uploaded_file)
+    
+    # Display the transcription result
+    if "text" in result:
+        st.success("Transcription Complete:")
+        st.write(result["text"])
+    elif "error" in result:
+        st.error(f"Error: {result['error']}")
+    else:
+        st.warning("Unexpected response from the API.")
+    
+    # Save audio to temporary file for pyAudioAnalysis
     with open("temp_audio.wav", "wb") as f:
         f.write(uploaded_file.getbuffer())
-
-    # Transcription using Whisper
-    transcription_result = model.transcribe("temp_audio.wav")
-    text = transcription_result["text"]
-    
-    # Display Transcript
-    st.write("Transcript:")
-    st.write(text)
 
     # Speaker Diarization using pyAudioAnalysis
     [flagsInd, classesAll, acc, CM] = aS.mtFileClassification("temp_audio.wav", "data/svmSM", "svm", True)
