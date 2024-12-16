@@ -4,7 +4,7 @@ import requests
 # Hugging Face API URLs and Headers
 TRANSCRIPTION_API_URL = "https://api-inference.huggingface.co/models/openai/whisper-large"
 DIARIZATION_API_URL = "https://api-inference.huggingface.co/models/pyannote/speaker-diarization"
-HEADERS = {"Authorization": "Bearer hf_your_huggingface_token"}
+HEADERS = {"Authorization": "Bearer <your_correct_huggingface_token>"}  # Replace with your correct token
 
 # Function to upload audio for transcription
 def transcribe_audio(file_path):
@@ -53,6 +53,12 @@ def main():
         # Call diarization API
         st.info("Performing speaker diarization...")
         diarization = diarize_audio(temp_file)
+        
+        # Check if the diarization response contains an error
+        if 'error' in diarization:
+            st.error(f"Diarization API error: {diarization['error']}")
+            return  # Stop further processing if there's an error in the diarization response
+        
         st.success("Speaker diarization complete!")
 
         # Debugging: Display diarization response
