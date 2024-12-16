@@ -1,5 +1,2 @@
 streamlit
-librosa 
-openai-whisper 
-pyaudioanalysis
-
+requests
