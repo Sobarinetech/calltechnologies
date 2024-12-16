@@ -3,25 +3,19 @@ import requests
 
 # Get the Hugging Face API token from Streamlit secrets
 API_TOKEN = st.secrets["hf_token"]
-API_URL = "https://api-inference.huggingface.co/models/nyrahealth/CrisperWhisper"
+API_URL = "https://api-inference.huggingface.co/models/theainerd/Wav2Vec2-large-xlsr-hindi"
 headers = {"Authorization": f"Bearer {API_TOKEN}"}
 
-# Function to query the Hugging Face model for transcription and diarization
+# Function to query the Hugging Face model for transcription
 def query(filename):
     with open(filename, "rb") as f:
         data = f.read()
-
-    # Add the return_timestamps=True parameter for long audio inputs
-    params = {
-        "return_timestamps": "true"
-    }
-    
-    response = requests.post(API_URL, headers=headers, data=data, params=params)
+    response = requests.post(API_URL, headers=headers, data=data)
     return response.json()
 
 # Streamlit app
 def main():
-    st.title("Speaker Diarization and Transcription with CrisperWhisper")
+    st.title("Hindi Speech-to-Text with Wav2Vec2")
 
     # Upload audio file (WAV, MP3, or FLAC formats)
     uploaded_file = st.file_uploader("Upload Call Recording (WAV/MP3/FLAC)", type=["wav", "mp3", "flac"])
@@ -35,7 +29,7 @@ def main():
         with open(temp_file_path, "wb") as temp_file:
             temp_file.write(uploaded_file.read())
 
-        # Call the CrisperWhisper model to transcribe and diarize the audio
+        # Call the Wav2Vec2 model to transcribe the audio
         st.info("Processing your audio...")
         result = query(temp_file_path)
 
@@ -43,16 +37,10 @@ def main():
         if "error" in result:
             st.error("There was an error processing the audio: " + result["error"])
         else:
-            # Display transcribed text and diarization results
-            st.success("Transcription and diarization complete!")
-
-            st.header("Transcription with Speaker Labels")
-            for segment in result.get("segments", []):
-                speaker_name = segment.get("speaker", "Unknown")
-                start_time = segment.get("start", 0)
-                end_time = segment.get("end", 0)
-                text = segment.get("text", "")
-                st.write(f"**{speaker_name}:** {text} (from {start_time}s to {end_time}s)")
+            # Display transcribed text
+            st.success("Transcription complete!")
+            st.header("Transcribed Text")
+            st.write(result.get("text", "No transcription available"))
 
 if __name__ == "__main__":
     main()
