@@ -1,7 +1,7 @@
 streamlit
-librosa
+librosa 
 speechrecognition
-spacy
-textblob
+spacy 
+textblob 
 pyannote.audio
-requests
+python -m spacy download en_core_web_sm
