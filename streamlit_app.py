@@ -54,14 +54,24 @@ def main():
         st.info("Performing speaker diarization...")
         diarization = diarize_audio(temp_file)
         st.success("Speaker diarization complete!")
-        
+
+        # Debugging: Display diarization response
+        st.write("Diarization Response:", diarization)
+
         # Map speakers and display results
         speaker_map = map_speakers(diarization)
         st.header("Final Transcription with Speaker Labels")
-        for segment in diarization['segments']:
-            speaker_name = speaker_map.get(segment['speaker'], "Unknown")
-            text = transcription.get('text', '')
-            st.write(f"**{speaker_name}:** {text}")
+        
+        # Use .get() method to avoid KeyError if 'segments' is missing
+        segments = diarization.get('segments', [])
+        
+        if not segments:
+            st.error("No segments found in diarization result.")
+        else:
+            for segment in segments:
+                speaker_name = speaker_map.get(segment['speaker'], "Unknown")
+                text = transcription.get('text', '')
+                st.write(f"**{speaker_name}:** {text}")
 
 if __name__ == "__main__":
     main()
