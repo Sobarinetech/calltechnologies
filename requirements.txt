@@ -1,4 +1,4 @@
 streamlit
 requests 
 pyAudioAnalysis
-sklearn
+scikit-learn
